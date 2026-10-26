@@ -1,0 +1,65 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install xcodegen
+        run: |
+          brew install xcodegen
+          xcodegen --version
+
+      - name: Generate Xcode project
+        run: |
+          cd OvitalMap
+          xcodegen generate
+          ls -la *.xcodeproj
+
+      - name: Build for macOS (Release)
+        run: |
+          cd OvitalMap
+          xcodebuild build \
+            -project OvitalMap.xcodeproj \
+            -scheme OvitalMap \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath ./build/DD \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Run unit tests
+        run: |
+          cd OvitalMap
+          xcodebuild test \
+            -project OvitalMap.xcodeproj \
+            -scheme OvitalMapTests \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath ./build/DD \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee build/test-output.log
+
+      - name: Show test results
+        if: always()
+        run: |
+          echo "=== Test Output ==="
+          grep -E 'Test Suite|tests with|failed|passed|error:' build/test-output.log || \
+            echo "(no test summary lines found)"
+          exit 0
+
+      - name: Upload build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ovitalmap-mac
+          path: OvitalMap/build/DD/Build/Products/Release/OvitalMap.app
+          if-no-files-found: warn
