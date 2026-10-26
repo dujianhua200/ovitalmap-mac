@@ -148,11 +148,20 @@ struct TileCanvas: View {
         for tile in tiles where tileImages[tile.key] == nil {
             let url = TileMath.fetchTile(tile.z, tile.x, tile.y, source: source)
             let key = tile.key
-            Task { @MainActor in
-                guard let data = try? await URLSession.shared.data(from: url).0,
-                      let image = NSImage(data: data) else { return }
-                // Mutate @State from MainActor
-                self.tileImages[key] = image
+            // Use URLSession.dataTask (async/await) so network failures are
+            // silent (caught via `try?`) and never crash the host process.
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                do {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    guard let image = NSImage(data: data) else { return }
+                    await MainActor.run {
+                        self.tileImages[key] = image
+                    }
+                } catch {
+                    // No network / unsupported URL in test environment — skip.
+                    return
+                }
             }
         }
     }
