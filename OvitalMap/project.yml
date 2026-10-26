@@ -1,0 +1,35 @@
+name: OvitalMap
+options:
+  bundleIdPrefix: com.ovital
+  deploymentTarget:
+    macOS: "13.0"
+targets:
+  OvitalMap:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        PRODUCT_BUNDLE_IDENTIFIER: com.ovital.OvitalMap
+        PRODUCT_NAME: OvitalMap
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSHumanReadableCopyright: "OvitalMap Rebuild - Open Source Tile Map Viewer"
+        INFOPLIST_KEY_CFBundleDisplayName: OvitalMap
+    dependencies:
+      - sdk:
+          - CoreData.framework
+          - UniformTypeIdentifiers.framework
+          - CoreLocation.framework
+
+  OvitalMapTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: OvitalMap
+    settings:
+      base:
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
