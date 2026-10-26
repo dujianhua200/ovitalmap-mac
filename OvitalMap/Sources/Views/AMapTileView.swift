@@ -148,19 +148,19 @@ struct TileCanvas: View {
         for tile in tiles where tileImages[tile.key] == nil {
             let url = TileMath.fetchTile(tile.z, tile.x, tile.y, source: source)
             let key = tile.key
-            // Use URLSession.dataTask (async/await) so network failures are
-            // silent (caught via `try?`) and never crash the host process.
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
+            // Fire-and-forget background fetch; on success hop to MainActor to
+            // update @State. Network failures are silent (try?) so a host app
+            // launched in CI without internet does not crash.
+            Task {
                 do {
                     let (data, _) = try await URLSession.shared.data(from: url)
                     guard let image = NSImage(data: data) else { return }
-                    await MainActor.run {
+                    await MainActor.run { [weak self] in
+                        guard let self = self else { return }
                         self.tileImages[key] = image
                     }
                 } catch {
-                    // No network / unsupported URL in test environment — skip.
-                    return
+                    // Unsupported URL / no network in CI — skip silently.
                 }
             }
         }
