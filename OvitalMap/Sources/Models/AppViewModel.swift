@@ -113,14 +113,12 @@ final class AppViewModel: ObservableObject {
     func mapClicked(at coord: CLLocationCoordinate2D) {
         lastClickCoordinate = coord
         let gcj = GCJ02.wgs84ToGCJ02(lat: coord.latitude, lng: coord.longitude)
-        let wgs = GCJ02.gcj02ToWGS84(lat: gcj.lat, lng: gcj.lng)
-        // Show both
         let nS = coord.latitude >= 0 ? "N" : "S"
         let eW = coord.longitude >= 0 ? "E" : "W"
         coordinateReadout = String(
-            format: "WGS-84: %.6f°%s %.6f°%s\nGCJ-02: %.6f°.6f°%s",
+            format: "WGS-84: %.6f°%s %.6f°%s\nGCJ-02: %.6f°%s %.6f°%s",
             abs(coord.latitude), nS, abs(coord.longitude), eW,
-            gcj.lat, nS
+            abs(gcj.lat), nS, abs(gcj.lng), eW
         )
         // If in fence-placement mode, add vertex
         if isPlacingFence {
