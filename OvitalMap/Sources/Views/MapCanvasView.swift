@@ -30,22 +30,30 @@ struct OverlayLayerView: View {
 
     var body: some View {
         GeometryReader { geo in
+            // Capture the MainActor-isolated state in locals before the Canvas
+            // closure so the (non-isolated) renderer can read plain values.
+            let center = vm.mapCenter
+            let zoom = Int(vm.zoomLevel)
+            let fences = vm.fences
+            let placingFence = vm.isPlacingFence
+            let draftVerts = vm.fenceDraftVertices
+            let tracks = vm.tracks
+            let routes = vm.routes
+            let marks = vm.pointMarks
+            let beacons = vm.sharedBeacons
+            let lastClick = vm.lastClickCoordinate
+
             Canvas { ctx, size in
-                // Compute a projection helper: lat/lng -> view space
                 func project(lat: Double, lng: Double) -> CGPoint {
-                    // World Mercator pixel coords at current zoom
-                    let z = Int(vm.zoomLevel)
+                    let z = zoom
                     let n = Double(1 << z)
                     let tileSize: Double = 256
                     let totalWorldWidth = tileSize * n
                     let merc = TileMath.wgs84ToMercator(lat: lat, lng: lng)
-                    let mercCenter = TileMath.wgs84ToMercator(lat: vm.mapCenter.latitude,
-                                                               lng: vm.mapCenter.longitude)
+                    let mercCenter = TileMath.wgs84ToMercator(lat: center.latitude,
+                                                               lng: center.longitude)
                     let relX = merc.x - mercCenter.x
                     let relY = merc.y - mercCenter.y
-                    // world pixels -> view points (tileSize px per tile, n tiles across)
-                    let viewTileSize = tileSize * pow(2, Double(z - Int(vm.zoomLevel)))
-                    _ = viewTileSize
                     let pxPerMercM = size.width / (totalWorldWidth / tileSize * 8.0)
                     let x = size.width / 2 + relX * pxPerMercM
                     let y = size.height / 2 + relY * pxPerMercM
@@ -53,7 +61,7 @@ struct OverlayLayerView: View {
                 }
 
                 // ── Fences ────────────────────────────────
-                for fence in vm.fences {
+                for fence in fences {
                     guard fence.vertices.count >= 2 else { continue }
                     var path = Path()
                     path.move(to: project(lat: fence.vertices[0].latitude,
@@ -67,18 +75,19 @@ struct OverlayLayerView: View {
                 }
 
                 // Fence draft
-                if vm.isPlacingFence, vm.fenceDraftVertices.count >= 2 {
+                if placingFence, draftVerts.count >= 2 {
                     var path = Path()
-                    path.move(to: project(lat: vm.fenceDraftVertices[0].latitude,
-                                          lng: vm.fenceDraftVertices[0].longitude))
-                    for v in vm.fenceDraftVertices.dropFirst() {
+                    path.move(to: project(lat: draftVerts[0].latitude,
+                                          lng: draftVerts[0].longitude))
+                    for v in draftVerts.dropFirst() {
                         path.addLine(to: project(lat: v.latitude, lng: v.longitude))
                     }
-                    ctx.stroke(path, with: .color(.orange), style: StrokeStyle(lineWidth: 2, dash: [6,3]))
+                    ctx.stroke(path, with: .color(.orange),
+                               style: StrokeStyle(lineWidth: 2, dash: [6, 3]))
                 }
 
                 // ── GPX Tracks ─────────────────────────────
-                for track in vm.tracks {
+                for track in tracks {
                     for seg in track.segments {
                         guard seg.count >= 2 else { continue }
                         var path = Path()
@@ -91,7 +100,7 @@ struct OverlayLayerView: View {
                 }
 
                 // ── Routes ─────────────────────────────────
-                for route in vm.routes {
+                for route in routes {
                     guard route.points.count >= 2 else { continue }
                     var path = Path()
                     path.move(to: project(lat: route.points[0].latitude,
@@ -100,33 +109,33 @@ struct OverlayLayerView: View {
                         path.addLine(to: project(lat: p.latitude, lng: p.longitude))
                     }
                     ctx.stroke(path, with: .color(.green.opacity(0.9)),
-                               style: StrokeStyle(lineWidth: 3, dash: [8,4]))
+                               style: StrokeStyle(lineWidth: 3, dash: [8, 4]))
                 }
 
                 // ── Point marks ────────────────────────────
-                for p in vm.pointMarks {
+                for p in marks {
                     let pt = project(lat: p.latitude, lng: p.longitude)
                     let r: CGFloat = 5
                     let circle = Path(ellipseIn: CGRect(x: pt.x - r, y: pt.y - r,
-                                                         width: r*2, height: r*2))
+                                                         width: r * 2, height: r * 2))
                     ctx.fill(circle, with: .color(.orange))
                     ctx.stroke(circle, with: .color(.white), lineWidth: 1.5)
                 }
 
                 // ── Beacons ────────────────────────────────
-                for b in vm.sharedBeacons {
+                for b in beacons {
                     let pt = project(lat: b.lat, lng: b.lng)
                     let r: CGFloat = 7
                     let circle = Path(ellipseIn: CGRect(x: pt.x - r, y: pt.y - r,
-                                                         width: r*2, height: r*2))
+                                                         width: r * 2, height: r * 2))
                     ctx.fill(circle, with: .color(Color(hex: b.colorHex).opacity(0.55)))
                     ctx.stroke(circle, with: .color(Color(hex: b.colorHex)), lineWidth: 2)
                 }
 
                 // ── Last click marker ──────────────────────
-                if let c = vm.lastClickCoordinate {
+                if let c = lastClick {
                     let pt = project(lat: c.latitude, lng: c.longitude)
-                    let cross = 8.0
+                    let cross: CGFloat = 8
                     var crossPath = Path()
                     crossPath.move(to: CGPoint(x: pt.x - cross, y: pt.y))
                     crossPath.addLine(to: CGPoint(x: pt.x + cross, y: pt.y))
