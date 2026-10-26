@@ -267,10 +267,10 @@ struct SidePanelView: View {
 
 extension Color {
     init(hex: String) {
-        var hex = hex.trimmingCharacters(in: .alphanumerics.inverted)
+        let cleaned = hex.trimmingCharacters(in: .alphanumerics.inverted)
             .trimmingCharacters(in: CharacterSet(charactersIn: "#"))
         var value: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&value)
+        Scanner(string: cleaned).scanHexInt64(&value)
         let r = Double((value & 0xFF0000) >> 16) / 255.0
         let g = Double((value & 0x00FF00) >> 8) / 255.0
         let b = Double(value & 0x0000FF) / 255.0
