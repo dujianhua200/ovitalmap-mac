@@ -24,28 +24,31 @@ enum TileSource: Hashable, Identifiable, CaseIterable, Codable {
         }
     }
 
-    /// Returns the tile URL for (z, x, y). Uses a random shard 1–4 for AMAP
-    /// so the cache key is stable but the hostname is rotated for load balancing.
+    /// Returns the tile URL for (z, x, y). Uses a deterministic shard 1–4
+    /// for AMAP so the cache key is stable but the hostname is rotated.
     func tileURL(z: Int, x: Int, y: Int) -> URL {
         switch self {
-        case .amapZhCN, .amapEN, .amapJa:
-            let shard = 1 + ((x &* y &* 31) % 4)   // deterministic per tile
-            let lang: String
-            switch self {
-            case .amapZhCN: lang = "zh_cn"
-            case .amapEN:   lang = "en"
-            case .amapJa:   lang = "ja"
-            case .osm:      break
-            }
-            let host = "webrd\(shard).is.autonavi.com"
-            return URL(string: "\(host)/appmaptile?lang=\(lang)&size=256&scale=1&style=7&x=\(x)&y=\(y)&z=\(z)")!
+        case .amapZhCN:
+            return amapURL(z: z, x: x, y: y, lang: "zh_cn")
+        case .amapEN:
+            return amapURL(z: z, x: x, y: y, lang: "en")
+        case .amapJa:
+            return amapURL(z: z, x: x, y: y, lang: "ja")
         case .osm:
-            let shard = "a"
-            let hosts = ["tile.openstreetmap.org", "tile-a.openstreetmap.org"]
-            let host = (x + y) % 2 == 0 ? "tile.openstreetmap.org" : hosts[0]
-            _ = shard
+            let host: String
+            if (x + y) % 2 == 0 {
+                host = "tile.openstreetmap.org"
+            } else {
+                host = "tile-a.openstreetmap.org"
+            }
             return URL(string: "https://\(host)/\(z)/\(x)/\(y).png")!
         }
+    }
+
+    private func amapURL(z: Int, x: Int, y: Int, lang: String) -> URL {
+        let shard = 1 + ((x &* y &* 31) % 4)
+        let host = "webrd\(shard).is.autonavi.com"
+        return URL(string: "\(host)/appmaptile?lang=\(lang)&size=256&scale=1&style=7&x=\(x)&y=\(y)&z=\(z)")!
     }
 }
 
