@@ -57,7 +57,7 @@ final class GPXParserTests: XCTestCase {
         XCTAssertEqual(gpx.tracks[0].name, "Test Track")
         XCTAssertEqual(gpx.tracks[0].segments.count, 1)
         XCTAssertEqual(gpx.tracks[0].segments[0].count, 2)
-        XCTAssertEqual(gpx.tracks[0].segments[0][0].elevation, 50.0, accuracy: 1e-6)
+        XCTAssertEqual(gpx.tracks[0].segments[0][0].elevation ?? -1, 50.0, accuracy: 1e-6)
         XCTAssertNotNil(gpx.tracks[0].segments[0][0].time)
         let t0 = gpx.tracks[0].segments[0][0].time!
         let t1 = gpx.tracks[0].segments[0][1].time!
