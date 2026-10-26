@@ -61,7 +61,7 @@ final class GPXParserTests: XCTestCase {
         XCTAssertNotNil(gpx.tracks[0].segments[0][0].time)
         let t0 = gpx.tracks[0].segments[0][0].time!
         let t1 = gpx.tracks[0].segments[0][1].time!
-        XCTAssertEqual(t0.timeIntervalSince(t1), 1.0, accuracy: 0.5)
+        XCTAssertEqual(t1.timeIntervalSince(t0), 1.0, accuracy: 0.5)
 
         // Route
         XCTAssertEqual(gpx.routes[0].name, "Test Route")
@@ -77,9 +77,9 @@ final class GPXParserTests: XCTestCase {
         """
         let data = empty.data(using: .utf8)!
         let gpx = try GPXParser.parse(data)
-        XCTAssertEqual(gpx.waypoints.isEmpty, true)
-        XCTAssertEqual(gpx.tracks.isEmpty, true)
-        XCTAssertEqual(gpx.routes.isEmpty, true)
+        XCTAssertTrue(gpx.waypoints.isEmpty)
+        XCTAssertTrue(gpx.tracks.isEmpty)
+        XCTAssertTrue(gpx.routes.isEmpty)
     }
 
     func testParseInvalidXMLThrows() {
@@ -94,9 +94,11 @@ final class GPXParserTests: XCTestCase {
         <gpx version="1.0"><trk><trkseg><trkpt lat="0" lon="0"/></trkseg></trk></gpx>
         """
         let gpx = try GPXParser.parse(gpxXml.data(using: .utf8)!)
-        XCTAssertEqual(gpx.waypoints.isEmpty, true)
+        XCTAssertTrue(gpx.waypoints.isEmpty)
         XCTAssertEqual(gpx.tracks.count, 1)
+        XCTAssertEqual(gpx.tracks[0].segments.count, 1)
         XCTAssertEqual(gpx.tracks[0].segments[0].count, 1)
+        XCTAssertEqual(gpx.tracks[0].segments[0][0].latitude, 0.0, accuracy: 1e-9)
     }
 }
 
@@ -151,12 +153,8 @@ final class GCJ02Tests: XCTestCase {
 final class TileMathTests: XCTestCase {
 
     func testWGS84ToTileCoordsBeijing() {
-        // Beijing at z=13
         let (x, y) = TileMath.wgs84ToTileCoords(lat: 39.9042, lng: 116.4074, z: 13)
-        // Expected: around x=5854, y=2190 (±2 tiles)
-        let tolerance = 2
-        // From the formula: n=8192, lng 116.4074 -> (116.4074+180)/360*8192 = 6742.5 → x≈6742?
-        // Let's just verify it's within [0, 8191]
+        // At z=13 there are 8192×8192 tiles; verify valid range
         XCTAssertGreaterThanOrEqual(x, 0)
         XCTAssertLessThan(x, 8192)
         XCTAssertGreaterThanOrEqual(y, 0)
@@ -169,21 +167,20 @@ final class TileMathTests: XCTestCase {
         let (x, y) = TileMath.wgs84ToTileCoords(lat: origLat, lng: origLng, z: z)
         let (lat, lng) = TileMath.tileCoordsToWGS84(x: x, y: y, z: z)
 
-        // The tile NW corner will be slightly north/west of the original point
-        // So lat should be >= origLat, lng <= origLng
-        // The difference should be at most one tile in degree-space at z=13
+        // The recovered coordinate should be the NW corner of the tile,
+        // so it differs from orig by at most one tile width in degrees
         let maxTileDegrees = 360.0 / Double(1 << z)
-        XCTAssertLessThanOrEqual(abs(lng - origLng), maxTileDegrees)
-        XCTAssertLessThanOrEqual(abs(lat - origLat), maxTileDegrees * 2) // Mercator distortion
+        XCTAssertLessThanOrEqual(abs(lng - origLng), maxTileDegrees,
+                                  "lng should differ by at most one tile")
+        XCTAssertLessThanOrEqual(abs(lat - origLat), maxTileDegrees * 2.0,
+                                  "lat should differ by at most two tiles (Mercator distortion)")
     }
 
     func testWGS84MercatorBeijing() {
         let (x, y) = TileMath.wgs84ToMercator(lat: 39.9042, lng: 116.4074)
-        // lng 116.4° → x ≈ 6378137 * 116.4074 * π/180 ≈ 12_963_000
         let expectedX = 6378137.0 * 116.4074 * .pi / 180.0
         XCTAssertEqual(x, expectedX, accuracy: 1.0)
-        // lat 39.9° → y ≈ 6378137 * ln(tan(π/4 + 39.9042/2 * π/180)) ≈ 4_930_000
-        let expectedY = 6378137.0 * log(tan((39.9042 * .pi / 180.0) / 2 + .pi / 4))
+        let expectedY = 6378137.0 * log(tan(39.9042 * .pi / 180.0 / 2 + .pi / 4))
         XCTAssertEqual(y, expectedY, accuracy: 1.0)
     }
 
@@ -197,17 +194,26 @@ final class TileMathTests: XCTestCase {
 
     func testTileURLForAMAP() {
         let url = TileSource.amapZhCN.tileURL(z: 13, x: 6742, y: 2326)
-        XCTAssertTrue(url.absoluteString.contains("webrd"))
-        XCTAssertTrue(url.absoluteString.contains("lang=zh_cn"))
-        XCTAssertTrue(url.absoluteString.contains("x=6742"))
-        XCTAssertTrue(url.absoluteString.contains("y=2326"))
-        XCTAssertTrue(url.absoluteString.contains("z=13"))
+        let str = url.absoluteString
+        XCTAssertTrue(str.contains("webrd"))
+        XCTAssertTrue(str.contains("lang=zh_cn"))
+        XCTAssertTrue(str.contains("x=6742"))
+        XCTAssertTrue(str.contains("y=2326"))
+        XCTAssertTrue(str.contains("z=13"))
     }
 
     func testOSMTileURL() {
         let url = TileSource.osm.tileURL(z: 12, x: 100, y: 200)
-        XCTAssertTrue(url.absoluteString.hasPrefix("https://"))
-        XCTAssertTrue(url.absoluteString.contains("/12/100/200.png"))
+        let str = url.absoluteString
+        XCTAssertTrue(str.hasPrefix("https://"))
+        XCTAssertTrue(str.contains("/12/100/200.png"))
+    }
+
+    func testAMapENAndJaURLs() {
+        let enURL = TileSource.amapEN.tileURL(z: 10, x: 500, y: 500)
+        XCTAssertTrue(enURL.absoluteString.contains("lang=en"))
+        let jaURL = TileSource.amapJa.tileURL(z: 10, x: 500, y: 500)
+        XCTAssertTrue(jaURL.absoluteString.contains("lang=ja"))
     }
 }
 
