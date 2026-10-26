@@ -167,13 +167,13 @@ final class TileMathTests: XCTestCase {
         let (x, y) = TileMath.wgs84ToTileCoords(lat: origLat, lng: origLng, z: z)
         let (lat, lng) = TileMath.tileCoordsToWGS84(x: x, y: y, z: z)
 
-        // The recovered coordinate should be the NW corner of the tile,
-        // so it differs from orig by at most one tile width in degrees
+        // At z=13 each tile is 360/8192 ≈ 0.044° wide.
+        // The NW corner differs from the input by at most one tile in each direction.
         let maxTileDegrees = 360.0 / Double(1 << z)
         XCTAssertLessThanOrEqual(abs(lng - origLng), maxTileDegrees,
                                   "lng should differ by at most one tile")
-        XCTAssertLessThanOrEqual(abs(lat - origLat), maxTileDegrees * 2.0,
-                                  "lat should differ by at most two tiles (Mercator distortion)")
+        XCTAssertLessThanOrEqual(abs(lat - origLat), maxTileDegrees,
+                                  "lat should differ by at most one tile")
     }
 
     func testWGS84MercatorBeijing() {
