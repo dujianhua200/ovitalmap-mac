@@ -27,14 +27,9 @@ actor TileImageCache {
         }
         cache[k] = data
         totalBytes += data.count
-        while totalBytes > maxBytes && !cache.isEmpty {
-            // Evict arbitrary entry (good enough for LRU-lite)
-            if let entry = cache.makeIterator().next() {
-                totalBytes -= entry.value.count
-                cache[entry.key] = nil
-            } else {
-                break
-            }
+        while totalBytes > maxBytes, let k = cache.keys.first {
+            totalBytes -= cache[k]?.count ?? 0
+            cache[k] = nil
         }
         return true
     }
