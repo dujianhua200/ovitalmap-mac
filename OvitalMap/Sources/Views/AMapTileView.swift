@@ -1,6 +1,12 @@
 import SwiftUI
 import CoreLocation
 
+/// Observable container for the tile image dictionary, held by the view via
+/// `@StateObject` so background tasks can mutate it safely.
+final class TileImageStore: ObservableObject {
+    @Published var images: [String: NSImage] = [:]
+}
+
 /// A SwiftUI view that renders a custom tile map using AMAP public tiles
 /// (or any Web Mercator slippy-map source). Does not depend on MapKit;
 /// draws tiles directly with `Image` views positioned in screen space.
@@ -34,7 +40,7 @@ struct TileCanvas: View {
     let tileSize: Int
     let onTap: (CLLocationCoordinate2D) -> Void
 
-    @State private var tileImages: [String: NSImage] = [:]
+    @StateObject private var store = TileImageStore()
 
     /// Fixed viewport size (the parent frame controls the actual layout size).
     private let viewWidth: CGFloat = 1000
@@ -49,7 +55,7 @@ struct TileCanvas: View {
                     let key = tile.key
                     let offset = tileScreenOffset(tile: tile, viewSize: geo.size)
                     Group {
-                        if let img = tileImages[key] {
+                        if let img = store.images[key] {
                             Image(nsImage: img)
                                 .resizable()
                         } else {
@@ -145,20 +151,26 @@ struct TileCanvas: View {
 
     private func loadTiles(viewSize: CGSize) {
         let tiles = visibleTiles(viewSize: viewSize)
-        for tile in tiles where tileImages[tile.key] == nil {
+        for tile in tiles where store.images[tile.key] == nil {
             let url = TileMath.fetchTile(tile.z, tile.x, tile.y, source: source)
             let key = tile.key
-            // Fire-and-forget background fetch; on success hop to MainActor to
-            // update @State. Network failures are silent (try?) so a host app
-            // launched in CI without internet does not crash.
-            Task {
+            // Check the shared actor cache first, then fetch from the network.
+            // Network failures are silent so a CI host without internet does
+            // not crash. `store` is a class reference, so `weak` is valid.
+            Task.detached { [weak store] in
+                guard let store = store else { return }
+                // 1. Try in-memory cache
+                if let cached = await TileImageCache.shared.get(z: tile.z, x: tile.x, y: tile.y),
+                   let image = NSImage(data: cached) {
+                    await MainActor.run { store.images[key] = image }
+                    return
+                }
+                // 2. Fetch from network
                 do {
                     let (data, _) = try await URLSession.shared.data(from: url)
                     guard let image = NSImage(data: data) else { return }
-                    await MainActor.run { [weak self] in
-                        guard let self = self else { return }
-                        self.tileImages[key] = image
-                    }
+                    await TileImageCache.shared.put(z: tile.z, x: tile.x, y: tile.y, data: data)
+                    await MainActor.run { store.images[key] = image }
                 } catch {
                     // Unsupported URL / no network in CI — skip silently.
                 }
