@@ -88,6 +88,39 @@ final class GPXParserTests: XCTestCase {
         XCTAssertThrowsError(try GPXParser.parse(data))
     }
 
+    func testParseWaypointWithExtensionsKeepsName() throws {
+        // extensions 等未知元素不能破坏解析栈，否则后续 <name> 会挂到错误的父节点上。
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gpx version="1.1" creator="test">
+          <wpt lat="1.5" lon="2.5">
+            <extensions><custom>ignored</custom></extensions>
+            <name>After Extensions</name>
+          </wpt>
+        </gpx>
+        """
+        let gpx = try GPXParser.parse(xml.data(using: .utf8)!)
+        XCTAssertEqual(gpx.waypoints.count, 1)
+        XCTAssertEqual(gpx.waypoints[0].name, "After Extensions")
+        XCTAssertEqual(gpx.waypoints[0].latitude, 1.5, accuracy: 1e-9)
+        XCTAssertEqual(gpx.waypoints[0].longitude, 2.5, accuracy: 1e-9)
+    }
+
+    func testParseNamespacedGPX() throws {
+        // 带命名空间前缀的 GPX（<gpx:gpx>）应按本地名解析。
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gpx:gpx xmlns:gpx="http://www.topografix.com/GPX/1/1" version="1.1" creator="test">
+          <gpx:wpt lat="3.5" lon="4.5"><gpx:name>Prefixed</gpx:name></gpx:wpt>
+        </gpx:gpx>
+        """
+        let gpx = try GPXParser.parse(xml.data(using: .utf8)!)
+        XCTAssertEqual(gpx.version, "1.1")
+        XCTAssertEqual(gpx.waypoints.count, 1)
+        XCTAssertEqual(gpx.waypoints[0].name, "Prefixed")
+        XCTAssertEqual(gpx.waypoints[0].latitude, 3.5, accuracy: 1e-9)
+    }
+
     func testParseNoWaypoints() throws {
         let gpxXml = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -121,6 +154,13 @@ final class GCJ02Tests: XCTestCase {
         let lngDelta = abs(gcj.lng - wgs.lng)
         XCTAssertLessThan(latDelta, 0.02, "GCJ-02 lat offset should be small")
         XCTAssertLessThan(lngDelta, 0.02, "GCJ-02 lng offset should be small")
+    }
+
+    func testWGS84ToGCJ02KnownBeijingValue() {
+        // 标准算法参考值：北京 WGS-84 (39.9042, 116.4074) 偏移约 (+0.0014, +0.0062)。
+        let gcj = GCJ02.wgs84ToGCJ02(lat: 39.9042, lng: 116.4074)
+        XCTAssertEqual(gcj.lat, 39.90560334316507, accuracy: 1e-6)
+        XCTAssertEqual(gcj.lng, 116.41364225378803, accuracy: 1e-6)
     }
 
     func testGCJ02ToWGS84RoundTrip() {
@@ -195,11 +235,31 @@ final class TileMathTests: XCTestCase {
     func testTileURLForAMAP() {
         let url = TileSource.amapZhCN.tileURL(z: 13, x: 6742, y: 2326)
         let str = url.absoluteString
-        XCTAssertTrue(str.contains("webrd"))
+        XCTAssertTrue(str.hasPrefix("https://"), "URL 必须带 scheme，否则 URLSession 报 unsupported URL")
+        XCTAssertEqual(url.scheme, "https")
+        XCTAssertEqual(url.host, "webrd\(1 + ((6742 &* 2326 &* 31) % 4)).is.autonavi.com")
         XCTAssertTrue(str.contains("lang=zh_cn"))
         XCTAssertTrue(str.contains("x=6742"))
         XCTAssertTrue(str.contains("y=2326"))
         XCTAssertTrue(str.contains("z=13"))
+    }
+
+    func testAMapProjectUnprojectRoundTrip() {
+        let source = TileSource.amapZhCN
+        let projected = source.project(lat: 39.9042, lng: 116.4074)
+        // 北京属于 GCJ-02 偏移区，投影后坐标应发生变化
+        XCTAssertNotEqual(projected.lat, 39.9042)
+        XCTAssertNotEqual(projected.lng, 116.4074)
+
+        let back = source.unproject(lat: projected.lat, lng: projected.lng)
+        XCTAssertEqual(back.lat, 39.9042, accuracy: 1e-5)
+        XCTAssertEqual(back.lng, 116.4074, accuracy: 1e-5)
+    }
+
+    func testOSMProjectIsIdentity() {
+        let projected = TileSource.osm.project(lat: 39.9042, lng: 116.4074)
+        XCTAssertEqual(projected.lat, 39.9042, accuracy: 1e-12)
+        XCTAssertEqual(projected.lng, 116.4074, accuracy: 1e-12)
     }
 
     func testOSMTileURL() {
@@ -327,6 +387,8 @@ final class AppViewModelTests: XCTestCase {
         vm.mapClicked(at: .init(latitude: 39.9, longitude: 116.4))
         XCTAssertNotNil(vm.lastClickCoordinate)
         XCTAssertFalse(vm.coordinateReadout.contains("Click the map"))
+        XCTAssertTrue(vm.coordinateReadout.contains("WGS-84:"))
+        XCTAssertTrue(vm.coordinateReadout.contains("GCJ-02:"))
     }
 
     @MainActor
@@ -341,6 +403,8 @@ final class AppViewModelTests: XCTestCase {
         vm.finishFencePlacement()
         // Should have set alertMessage, not created the fence
         XCTAssertTrue(vm.fences.isEmpty)
+        XCTAssertTrue(vm.isPlacingFence, "顶点不足时应保持绘制模式，允许继续补点")
+        XCTAssertNotNil(vm.alertMessage)
 
         // Add 3rd vertex and finish
         vm.mapClicked(at: .init(latitude: 1, longitude: 2))

@@ -44,7 +44,7 @@ private final class _GPXHandler: NSObject, XMLParserDelegate {
     private var tracks    = [GPXTrack]()
     private var routes    = [GPXRoute]()
 
-    private enum Tag { case gpx, wpt, trk, trkseg, trkpt, rte, rtept, name, ele, time }
+    private enum Tag { case gpx, wpt, trk, trkseg, trkpt, rte, rtept, name, ele, time, other }
     private var stack: [Tag] = []
     private var nameOwner: Tag?
     private var textBuf = ""
@@ -54,11 +54,17 @@ private final class _GPXHandler: NSObject, XMLParserDelegate {
 
     // MARK: XMLParserDelegate
 
+    /// 去掉命名空间前缀，兼容 `<gpx:trk>` 这类写法。
+    private static func localName(_ name: String) -> String {
+        guard let colon = name.firstIndex(of: ":") else { return name }
+        return String(name[name.index(after: colon)...])
+    }
+
     func parser(_ parser: XMLParser, didStartElement elementName: String,
                 namespaceURI: String?, qualifiedName: String?,
                 attributes: [String: String]) {
         textBuf = ""
-        switch elementName {
+        switch Self.localName(elementName) {
         case "gpx":
             gpxVersion = attributes["version"] ?? "1.0"
             gpxCreator = attributes["creator"]
@@ -104,7 +110,9 @@ private final class _GPXHandler: NSObject, XMLParserDelegate {
         case "time":
             stack.append(.time)
         default:
-            break
+            // 未知元素也要入栈，否则 didEndElement 的 removeLast 会把父元素弹掉，
+            // 导致 <metadata>/<extensions> 之后的解析上下文错位。
+            stack.append(.other)
         }
     }
 
@@ -118,12 +126,22 @@ private final class _GPXHandler: NSObject, XMLParserDelegate {
         }
     }
 
+    func parser(_ parser: XMLParser, foundCDATA CDATABlock: Data) {
+        guard let text = String(data: CDATABlock, encoding: .utf8) else { return }
+        switch top() {
+        case .name, .ele, .time:
+            textBuf += text
+        default:
+            break
+        }
+    }
+
     func parser(_ parser: XMLParser, didEndElement elementName: String,
                 namespaceURI: String?, qualifiedName: String?) {
         let text = textBuf.trimmingCharacters(in: .whitespacesAndNewlines)
         textBuf = ""
 
-        switch elementName {
+        switch Self.localName(elementName) {
         case "name":
             applyName(owner: nameOwner, text: text)
         case "ele":

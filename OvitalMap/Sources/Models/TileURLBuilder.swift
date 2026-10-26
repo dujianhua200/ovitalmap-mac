@@ -48,7 +48,26 @@ enum TileSource: Hashable, Identifiable, CaseIterable, Codable {
     private func amapURL(z: Int, x: Int, y: Int, lang: String) -> URL {
         let shard = 1 + ((x &* y &* 31) % 4)
         let host = "webrd\(shard).is.autonavi.com"
-        return URL(string: "\(host)/appmaptile?lang=\(lang)&size=256&scale=1&style=7&x=\(x)&y=\(y)&z=\(z)")!
+        // 必须带 scheme，否则 URL 会被解析成相对路径，URLSession 报 -1002 unsupported URL。
+        return URL(string: "https://\(host)/appmaptile?lang=\(lang)&size=256&scale=1&style=7&x=\(x)&y=\(y)&z=\(z)")!
+    }
+
+    /// 瓦片使用的坐标系是否为 GCJ-02（高德系）。
+    var usesGCJ02: Bool {
+        switch self {
+        case .amapZhCN, .amapEN, .amapJa: return true
+        case .osm: return false
+        }
+    }
+
+    /// 把 WGS-84 坐标投影到该瓦片源的坐标系。
+    func project(lat: Double, lng: Double) -> (lat: Double, lng: Double) {
+        usesGCJ02 ? GCJ02.wgs84ToGCJ02(lat: lat, lng: lng) : (lat, lng)
+    }
+
+    /// 把该瓦片源坐标系下的坐标还原为 WGS-84。
+    func unproject(lat: Double, lng: Double) -> (lat: Double, lng: Double) {
+        usesGCJ02 ? GCJ02.gcj02ToWGS84(lat: lat, lng: lng) : (lat, lng)
     }
 }
 

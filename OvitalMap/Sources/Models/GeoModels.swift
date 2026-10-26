@@ -213,31 +213,32 @@ enum GCJ02 {
         if !isInChina(lat: lat, lng: lng) {
             return (lat, lng)
         }
-        let (wLat, wLng) = wgs84ToGCJ02(lat: lat, lng: lng)
-        return (lat * 2 - wLat, lng * 2 - wLng)
+        // 一次反解（2x − forward）误差可达 1e-5°，这里迭代修正到亚米级。
+        var wgsLat = lat
+        var wgsLng = lng
+        for _ in 0..<5 {
+            let fwd = wgs84ToGCJ02(lat: wgsLat, lng: wgsLng)
+            wgsLat += lat - fwd.lat
+            wgsLng += lng - fwd.lng
+        }
+        return (wgsLat, wgsLng)
     }
 
     // Krasovsky transformation helpers
+    // 系数取自公开的 GCJ-02 标准实现，改动前请先用已知坐标做回归验证。
     private static func transformLat(x: Double, y: Double) -> Double {
         var ret = -100.0 + 2.0*x + 3.0*y + 0.2*y*y + 0.1*x*y + 0.2*sqrt(abs(x))
-        let sy30 = sin(y * Double.pi / 30.0)
-        let sy180 = sin(y * Double.pi / 180.0)
-        ret += (20.0 * sy30 + 30.0 * sy180) * sin(y * Double.pi)
-        let sx30 = sin(x * Double.pi / 30.0)
-        let sx180 = sin(x * Double.pi / 180.0)
-        let sx60 = sin(x / 60.0 * Double.pi)
-        let sx3 = sin(x * Double.pi / 3.0)
-        ret += (20.0*sx30 + 40.0*sx180 + 150.0*sx60 + 320.0*sx3) * sin(x * Double.pi) / 3.0
+        ret += (20.0 * sin(6.0*x*Double.pi) + 20.0 * sin(2.0*x*Double.pi)) * 2.0/3.0
+        ret += (20.0 * sin(y*Double.pi) + 40.0 * sin(y/3.0*Double.pi)) * 2.0/3.0
+        ret += (160.0 * sin(y/12.0*Double.pi) + 320.0 * sin(y*Double.pi/30.0)) * 2.0/3.0
         return ret
     }
 
     private static func transformLng(x: Double, y: Double) -> Double {
         var ret = 300.0 + x + 2.0*y + 0.1*x*x + 0.1*x*y + 0.1*sqrt(abs(x))
-        let sx30 = sin(x * Double.pi / 30.0)
-        let sx180 = sin(x * Double.pi / 180.0)
-        ret += (200.0 * sx30 + 300.0 * sx180) * sin(x * Double.pi)
-        let sx60 = sin(x * Double.pi / 60.0)
-        ret += (20.0 * sx60 + 400.0 * sx180) * sin(x * Double.pi) / 6.0
+        ret += (20.0 * sin(6.0*x*Double.pi) + 20.0 * sin(2.0*x*Double.pi)) * 2.0/3.0
+        ret += (20.0 * sin(x*Double.pi) + 40.0 * sin(x/3.0*Double.pi)) * 2.0/3.0
+        ret += (150.0 * sin(x/12.0*Double.pi) + 300.0 * sin(x/30.0*Double.pi)) * 2.0/3.0
         return ret
     }
 }

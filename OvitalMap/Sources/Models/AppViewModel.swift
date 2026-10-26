@@ -115,11 +115,12 @@ final class AppViewModel: ObservableObject {
         let gcj = GCJ02.wgs84ToGCJ02(lat: coord.latitude, lng: coord.longitude)
         let nS = coord.latitude >= 0 ? "N" : "S"
         let eW = coord.longitude >= 0 ? "E" : "W"
-        coordinateReadout = String(
-            format: "WGS-84: %.6f°%s %.6f°%s\nGCJ-02: %.6f°%s %.6f°%s",
-            abs(coord.latitude), nS, abs(coord.longitude), eW,
-            abs(gcj.lat), nS, abs(gcj.lng), eW
-        )
+        // 注意：%@ 才接受 Swift String；用 %s 会把 String 当作 C 字符串指针读取并导致崩溃。
+        let wgsLat = String(format: "%.6f", abs(coord.latitude))
+        let wgsLng = String(format: "%.6f", abs(coord.longitude))
+        let gcjLat = String(format: "%.6f", abs(gcj.lat))
+        let gcjLng = String(format: "%.6f", abs(gcj.lng))
+        coordinateReadout = "WGS-84: \(wgsLat)°\(nS) \(wgsLng)°\(eW)\nGCJ-02: \(gcjLat)°\(nS) \(gcjLng)°\(eW)"
         // If in fence-placement mode, add vertex
         if isPlacingFence {
             fenceDraftVertices.append(GeoPoint(latitude: coord.latitude, longitude: coord.longitude))
@@ -137,9 +138,9 @@ final class AppViewModel: ObservableObject {
     /// Finish fence placement — requires ≥3 vertices
     func finishFencePlacement() {
         guard fenceDraftVertices.count >= 3 else {
+            // 顶点不足时只提示，保持绘制模式，允许用户继续点选补足。
             alertMessage = "Need at least 3 vertices to form a fence polygon"
             alertSeverity = .warning
-            isPlacingFence = false
             return
         }
         let fence = ElectronicFence(name: fenceDraftName, vertices: fenceDraftVertices)
@@ -199,6 +200,10 @@ final class AppViewModel: ObservableObject {
             }
             tracks.append(contentsOf: newTracks)
             routes.append(contentsOf: gpx.routes)
+            // 航点也进入图层，否则提示里统计了数量、界面上却看不到。
+            for w in gpx.waypoints {
+                pointMarks.append(GeoPoint(latitude: w.latitude, longitude: w.longitude, label: w.name))
+            }
             gpxImportCount += 1
             alertMessage = "Imported \(gpx.tracks.count) track(s), \(gpx.routes.count) route(s), \(gpx.waypoints.count) waypoint(s)"
             alertSeverity = .success

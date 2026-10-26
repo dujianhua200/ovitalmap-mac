@@ -46,20 +46,21 @@ jobs:
       - name: Run unit tests
         run: |
           cd OvitalMap
+          # pipefail 让 xcodebuild 的失败码穿透 tee，否则测试失败会被当成成功。
+          set -o pipefail
           xcodebuild test \
             -project OvitalMap.xcodeproj \
             -scheme OvitalMap \
             -destination 'platform=macOS' \
             -derivedDataPath ./build/DD \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_ALLOWED=NO 2>&1 \
             | tee build/test-output.log
-          grep -E '\*\* TEST (FAILED|SUCCEEDED) \*\*' build/test-output.log
 
       - name: Show test results
         if: always()
         run: |
           echo "=== Test Summary ==="
-          grep -E "Test Suite '(All tests|.*Tests)' (passed|failed)|Executed .* tests" build/test-output.log || \
+          grep -E "Test Suite '(All tests|.*Tests)' (passed|failed)|Executed .* tests" OvitalMap/build/test-output.log || \
             echo "(no test summary lines found)"
           exit 0
 
