@@ -17,11 +17,8 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_NSHumanReadableCopyright: "OvitalMap Rebuild - Open Source Tile Map Viewer"
         INFOPLIST_KEY_CFBundleDisplayName: OvitalMap
-    dependencies:
-      - sdk:
-          - CoreData.framework
-          - UniformTypeIdentifiers.framework
-          - CoreLocation.framework
+        SWIFT_VERSION: "5.0"
+        ENABLE_HARDENED_RUNTIME: "NO"
 
   OvitalMapTests:
     type: bundle.unit-test
@@ -33,3 +30,4 @@ targets:
     settings:
       base:
         MACOSX_DEPLOYMENT_TARGET: "13.0"
+        SWIFT_VERSION: "5.0"
