@@ -23,6 +23,13 @@ jobs:
         run: |
           cd OvitalMap
           xcodegen generate
+          # Downgrade objectVersion for Xcode 15.4 (macos-14 runner)
+          PROJ=OvitalMap.xcodeproj/project.pbxproj
+          if grep -q 'objectVersion = 77;' "$PROJ"; then
+            sed -i '' 's/objectVersion = 77;/objectVersion = 56;/' "$PROJ"
+            echo "Downgraded objectVersion to 56"
+          fi
+          grep 'objectVersion' "$PROJ"
           ls -la *.xcodeproj
 
       - name: Build for macOS (Release)
@@ -41,7 +48,7 @@ jobs:
           cd OvitalMap
           xcodebuild test \
             -project OvitalMap.xcodeproj \
-            -scheme OvitalMapTests \
+            -scheme OvitalMap \
             -configuration Release \
             -destination 'platform=macOS' \
             -derivedDataPath ./build/DD \
