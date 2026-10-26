@@ -49,17 +49,17 @@ jobs:
           xcodebuild test \
             -project OvitalMap.xcodeproj \
             -scheme OvitalMap \
-            -configuration Release \
             -destination 'platform=macOS' \
             -derivedDataPath ./build/DD \
             CODE_SIGNING_ALLOWED=NO \
             | tee build/test-output.log
+          grep -E '\*\* TEST (FAILED|SUCCEEDED) \*\*' build/test-output.log
 
       - name: Show test results
         if: always()
         run: |
-          echo "=== Test Output ==="
-          grep -E 'Test Suite|tests with|failed|passed|error:' build/test-output.log || \
+          echo "=== Test Summary ==="
+          grep -E "Test Suite '(All tests|.*Tests)' (passed|failed)|Executed .* tests" build/test-output.log || \
             echo "(no test summary lines found)"
           exit 0
 
