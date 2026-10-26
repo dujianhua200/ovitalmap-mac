@@ -93,8 +93,8 @@ enum TileMath {
     static func tileCoordsToWGS84(x: Int, y: Int, z: Int) -> (lat: Double, lng: Double) {
         let n = Double(1 << z)
         let lng = Double(x) / n * 360.0 - 180.0
-        let lat = 180.0 / .pi * atan(0.5 * (exp(.pi * (1 - Double(y) * 2 / n))
-                                              + exp(-.pi * (1 - Double(y) * 2 / n))))
+        let t = Double.pi - 2.0 * Double.pi * Double(y) / n
+        let lat = 180.0 / Double.pi * atan(0.5 * (exp(t) - exp(-t)))
         return (lat, lng)
     }
 
