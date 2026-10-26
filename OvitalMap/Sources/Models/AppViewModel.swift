@@ -229,10 +229,11 @@ final class AppViewModel: ObservableObject {
         zoomLevel = min(18, max(3, zoom))
     }
 
-    /// Remove all GPX data
+    /// Remove all GPX data (含由 GPX 航点生成的标记)
     func clearAllGPX() {
         tracks.removeAll()
         routes.removeAll()
+        pointMarks.removeAll()
     }
 }
 

@@ -426,6 +426,22 @@ final class AppViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testImportGPXAddsWaypointMarksAndClearRemovesThem() {
+        let vm = AppViewModel()
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gpx version="1.1"><wpt lat="1" lon="2"><name>W</name></wpt></gpx>
+        """
+        vm.importGPX(xml.data(using: .utf8)!)
+        XCTAssertEqual(vm.pointMarks.count, 1)
+        XCTAssertEqual(vm.pointMarks.first?.label, "W")
+        XCTAssertEqual(vm.pointMarks.first?.latitude ?? 0, 1.0, accuracy: 1e-9)
+
+        vm.clearAllGPX()
+        XCTAssertTrue(vm.pointMarks.isEmpty)
+    }
+
+    @MainActor
     func testAddPointMark() {
         let vm = AppViewModel()
         let coord = CLLocationCoordinate2D(latitude: 39.9, longitude: 116.4)

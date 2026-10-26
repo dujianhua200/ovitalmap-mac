@@ -52,7 +52,7 @@ struct ToolbarView: View {
 
             // Clear GPX
             Button("Clear GPX", action: vm.clearAllGPX)
-                .disabled(vm.tracks.isEmpty && vm.routes.isEmpty)
+                .disabled(vm.tracks.isEmpty && vm.routes.isEmpty && vm.pointMarks.isEmpty)
 
             Divider()
 
